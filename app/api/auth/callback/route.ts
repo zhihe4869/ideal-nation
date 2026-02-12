@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { OAuth2Client } from '@/lib/oauth-client'
 
 const oauthClient = new OAuth2Client({
-  clientId: process.env.NEXT_PUBLIC_SECOND_ME_CLIENT_ID || '',
-  clientSecret: process.env.NEXT_PUBLIC_SECOND_ME_CLIENT_SECRET || '',
-  redirectUri: process.env.NEXT_PUBLIC_SECOND_ME_REDIRECT_URI || '',
-  authUrl: process.env.NEXT_PUBLIC_SECOND_ME_AUTH_URL || ''
+  clientId: process.env.NEXT_PUBLIC_SECOND_ME_CLIENT_ID || 'ideal_nation_app',
+  clientSecret: process.env.NEXT_PUBLIC_SECOND_ME_CLIENT_SECRET || 'ideal_nation_secret_key',
+  redirectUri: process.env.NEXT_PUBLIC_SECOND_ME_REDIRECT_URI || 'http://localhost:3000/api/auth/callback',
+  authUrl: process.env.NEXT_PUBLIC_SECOND_ME_AUTH_URL || 'https://second-me.cn/oauth/authorize'
 })
 
 export async function GET(request: NextRequest) {

@@ -31,6 +31,10 @@ export class OAuth2Client {
       scope: 'read write skills',
       state: state || this.generateState()
     })
+    // 检查 authUrl 是否已经包含 /oauth/authorize
+    if (this.config.authUrl.includes('/oauth/authorize')) {
+      return `${this.config.authUrl}?${params.toString()}`
+    }
     return `${this.config.authUrl}/oauth/authorize?${params.toString()}`
   }
 
@@ -43,7 +47,13 @@ export class OAuth2Client {
       redirect_uri: this.config.redirectUri
     })
 
-    const response = await fetch(`${this.config.authUrl}/oauth/token`, {
+    // 使用环境变量中的 token URL
+    const tokenUrl = process.env.NEXT_PUBLIC_SECOND_ME_TOKEN_URL || 
+      (this.config.authUrl.includes('/oauth/authorize') 
+        ? this.config.authUrl.replace('/oauth/authorize', '/oauth/token') 
+        : `${this.config.authUrl}/oauth/token`)
+
+    const response = await fetch(tokenUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -70,7 +80,13 @@ export class OAuth2Client {
       client_secret: this.config.clientSecret
     })
 
-    const response = await fetch(`${this.config.authUrl}/oauth/token`, {
+    // 使用环境变量中的 token URL
+    const tokenUrl = process.env.NEXT_PUBLIC_SECOND_ME_TOKEN_URL || 
+      (this.config.authUrl.includes('/oauth/authorize') 
+        ? this.config.authUrl.replace('/oauth/authorize', '/oauth/token') 
+        : `${this.config.authUrl}/oauth/token`)
+
+    const response = await fetch(tokenUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -151,8 +167,8 @@ export class OAuth2Client {
 }
 
 export const oauthClient = new OAuth2Client({
-  clientId: process.env.NEXT_PUBLIC_SECOND_ME_CLIENT_ID || 'default_client_id',
-  clientSecret: process.env.NEXT_PUBLIC_SECOND_ME_CLIENT_SECRET || 'default_client_secret',
-  redirectUri: process.env.NEXT_PUBLIC_SECOND_ME_REDIRECT_URI || 'http://localhost:3000/auth/callback',
-  authUrl: process.env.NEXT_PUBLIC_SECOND_ME_AUTH_URL || 'http://localhost:8002'
+  clientId: process.env.NEXT_PUBLIC_SECOND_ME_CLIENT_ID || 'ideal_nation_app',
+  clientSecret: process.env.NEXT_PUBLIC_SECOND_ME_CLIENT_SECRET || 'ideal_nation_secret_key',
+  redirectUri: process.env.NEXT_PUBLIC_SECOND_ME_REDIRECT_URI || 'http://localhost:3000/api/auth/callback',
+  authUrl: process.env.NEXT_PUBLIC_SECOND_ME_AUTH_URL || 'https://second-me.cn/oauth/authorize'
 })

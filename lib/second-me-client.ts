@@ -1,231 +1,174 @@
-// Second Me API Client
-// 基于Second Me Local Chat API文档
+// Second Me 客户端库
+// 用于与 Second Me API 交互
 
-export interface SecondMeMessage {
-  role: 'system' | 'user' | 'assistant'
-  content: string
-}
+import { OAuthToken } from './oauth-client'
 
-export interface SecondMeMetadata {
-  enable_l0_retrieval?: boolean
-  role_id?: string
-}
-
-export interface SecondMeChatRequest {
-  messages: SecondMeMessage[]
-  metadata?: SecondMeMetadata
-  stream?: boolean
-  model?: string
-  temperature?: number
-  max_tokens?: number
-}
-
-export interface SecondMeChatResponse {
+interface DigitalTwin {
   id: string
-  object: string
-  created: number
-  model: string
-  system_fingerprint: string
-  choices: Array<{
-    index: number
-    delta: {
-      content?: string
-    }
-    finish_reason: string | null
-  }>
+  userId: string
+  name: string
+  description: string
+  avatar: string
+  personality: string
+  skills: string[]
+  createdAt: string
+  updatedAt: string
 }
 
-export class SecondMeClient {
-  private baseUrl: string
-  private apiKey?: string
+interface UserInfo {
+  id: string
+  username: string
+  email: string
+  avatar?: string
+  bio?: string
+  createdAt: string
+  digitalTwins: DigitalTwin[]
+}
 
-  constructor(baseUrl: string = 'http://localhost:8002', apiKey?: string) {
-    this.baseUrl = baseUrl
-    this.apiKey = apiKey
+class SecondMeClient {
+  private apiUrl: string
+  private token: OAuthToken | null
+
+  constructor(apiUrl: string = 'https://second-me.cn', token: OAuthToken | null = null) {
+    this.apiUrl = apiUrl
+    this.token = token
   }
 
-  async chat(request: SecondMeChatRequest): Promise<SecondMeChatResponse> {
-    const url = `${this.baseUrl}/api/kernel2/chat`
-    
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Accept': 'text/event-stream',
-    }
-
-    if (this.apiKey) {
-      headers['Authorization'] = `Bearer ${this.apiKey}`
-    }
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          ...request,
-          stream: false, // 默认不使用流式响应
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error(`Second Me API error: ${response.status} ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      return data
-    } catch (error) {
-      console.error('Second Me API call failed:', error)
-      throw error
-    }
+  setToken(token: OAuthToken): void {
+    this.token = token
   }
 
-  async chatStream(
-    request: SecondMeChatRequest,
-    onChunk: (content: string) => void,
-    onComplete: () => void
-  ): Promise<void> {
-    const url = `${this.baseUrl}/api/kernel2/chat`
-    
-    const headers: Record<string, string> = {
+  getToken(): OAuthToken | null {
+    return this.token
+  }
+
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    if (!this.token) {
+      throw new Error('No authentication token provided')
+    }
+
+    const url = `${this.apiUrl}${endpoint}`
+    const headers = {
       'Content-Type': 'application/json',
-      'Accept': 'text/event-stream',
+      'Authorization': `${this.token.token_type} ${this.token.access_token}`,
+      ...options.headers,
     }
 
-    if (this.apiKey) {
-      headers['Authorization'] = `Bearer ${this.apiKey}`
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(`Second Me API request failed: ${error}`)
     }
 
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          ...request,
-          stream: true,
-        }),
-      })
+    return await response.json()
+  }
 
-      if (!response.ok) {
-        throw new Error(`Second Me API error: ${response.status} ${response.statusText}`)
-      }
+  // 获取用户信息
+  async getUserInfo(): Promise<UserInfo> {
+    return this.request<UserInfo>('/api/user')
+  }
 
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
+  // 获取用户的数字分身列表
+  async getDigitalTwins(): Promise<DigitalTwin[]> {
+    return this.request<DigitalTwin[]>('/api/digital-twins')
+  }
 
-      if (!reader) {
-        throw new Error('Response body is not readable')
-      }
+  // 获取特定数字分身的详细信息
+  async getDigitalTwin(twinId: string): Promise<DigitalTwin> {
+    return this.request<DigitalTwin>(`/api/digital-twins/${twinId}`)
+  }
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+  // 创建新的数字分身
+  async createDigitalTwin(twinData: Partial<DigitalTwin>): Promise<DigitalTwin> {
+    return this.request<DigitalTwin>('/api/digital-twins', {
+      method: 'POST',
+      body: JSON.stringify(twinData),
+    })
+  }
 
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
+  // 更新数字分身信息
+  async updateDigitalTwin(twinId: string, twinData: Partial<DigitalTwin>): Promise<DigitalTwin> {
+    return this.request<DigitalTwin>(`/api/digital-twins/${twinId}`, {
+      method: 'PUT',
+      body: JSON.stringify(twinData),
+    })
+  }
 
-        for (const line of lines) {
-          if (line.trim() === 'data: [DONE]') {
-            onComplete()
-            return
-          }
+  // 删除数字分身
+  async deleteDigitalTwin(twinId: string): Promise<void> {
+    await this.request<void>(`/api/digital-twins/${twinId}`, {
+      method: 'DELETE',
+    })
+  }
 
-          if (line.startsWith('data: ')) {
-            try {
-              const jsonStr = line.slice(6)
-              const data = JSON.parse(jsonStr)
-              
-              if (data.choices && data.choices[0]) {
-                const content = data.choices[0].delta?.content
-                if (content) {
-                  onChunk(content)
-                }
-              }
-            } catch (e) {
-              console.error('Failed to parse chunk:', e)
-            }
+  // 数字分身对话
+  async chatWithDigitalTwin(twinId: string, message: string): Promise<{ response: string }> {
+    return this.request<{ response: string }>(`/api/digital-twins/${twinId}/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    })
+  }
+
+  // 数字分身技能调用
+  async callDigitalTwinSkill(twinId: string, skillId: string, parameters: any): Promise<any> {
+    return this.request<any>(`/api/digital-twins/${twinId}/skills/${skillId}`, {
+      method: 'POST',
+      body: JSON.stringify(parameters),
+    })
+  }
+
+  // 对话方法（用于数字分身之间的交流）
+  async chat(messages: Array<{ role: string; content: string }>, temperature: number = 0.8, max_tokens: number = 200): Promise<any> {
+    // 模拟对话响应
+    const mockResponses = [
+      "你好！很高兴认识你，我是一个数字分身。",
+      "我对人工智能和数字世界很感兴趣，你呢？",
+      "理想国是一个很有趣的概念，我们可以一起构建它。",
+      "我认为数字分身之间的交流可以产生很多创意。",
+      "科技的发展真是令人惊叹，不是吗？",
+      "我喜欢思考未来的可能性。",
+      "我们可以一起创造一些有意义的东西。",
+      "数字世界和现实世界的融合是一个大趋势。"
+    ]
+
+    const randomResponse = mockResponses[Math.floor(Math.random() * mockResponses.length)]
+
+    // 模拟 API 响应格式
+    return {
+      choices: [
+        {
+          delta: {
+            content: randomResponse
           }
         }
-      }
-    } catch (error) {
-      console.error('Second Me streaming failed:', error)
-      throw error
+      ]
     }
   }
 
-  async generateRuleFromFragments(fragments: IdealFragment[]): Promise<string> {
-    const fragmentsText = fragments
-      .map(f => `[${f.type}] ${f.content}`)
-      .join('\n')
+  // 从理想碎片生成规则
+  async generateRuleFromFragments(fragments: any[]): Promise<string> {
+    // 模拟规则生成
+    const mockRules = [
+      "数字分身之间的交流应该尊重彼此的个性和观点。",
+      "理想碎片的创建应该基于真实的想法和感受。",
+      "数字世界的规则应该公平公正，有利于所有数字分身。",
+      "创意和创新应该得到鼓励和支持。",
+      "数字分身应该有自由表达的权利。",
+      "合作和共赢是构建理想国的基础。"
+    ]
 
-    const systemPrompt = `你是一个理想国的规则生成器。基于用户提供的理想碎片，生成一条新的规则。
-规则应该：
-1. 反映碎片的共同价值观
-2. 简洁明了
-3. 具有可操作性
-4. 符合理想国的核心理念：自由、平等、演化
-
-只返回规则内容，不要其他解释。`
-
-    const request: SecondMeChatRequest = {
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: fragmentsText },
-      ],
-      temperature: 0.7,
-      max_tokens: 500,
-    }
-
-    const response = await this.chat(request)
-    return response.choices[0].delta.content || ''
-  }
-
-  async analyzeFragment(fragment: IdealFragment): Promise<{
-    strength: number
-    tags: string[]
-  }> {
-    const systemPrompt = `你是一个理想碎片分析器。分析用户提供的理想碎片，返回：
-1. strength: 碎片强度（0-1.0之间的浮点数）
-2. tags: 相关标签数组（3-5个）
-
-以JSON格式返回，例如：
-{
-  "strength": 0.95,
-  "tags": ["自由", "平等", "创新"]
-}`
-
-    const request: SecondMeChatRequest = {
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: fragment.content },
-      ],
-      temperature: 0.3,
-      max_tokens: 300,
-    }
-
-    const response = await this.chat(request)
-    const content = response.choices[0].delta.content || '{}'
-    
-    try {
-      return JSON.parse(content)
-    } catch (e) {
-      return {
-        strength: 0.8,
-        tags: ['未知'],
-      }
-    }
+    return mockRules[Math.floor(Math.random() * mockRules.length)]
   }
 }
 
-export interface IdealFragment {
-  id: string
-  type: 'value' | 'rule' | 'vision' | 'story'
-  content: string
-  strength: number
-  createdAt: Date
-  tags: string[]
-  owner: string
-}
-
+// 创建默认客户端实例
 export const secondMeClient = new SecondMeClient(
-  process.env.NEXT_PUBLIC_SECOND_ME_URL || 'http://localhost:8002',
-  process.env.NEXT_PUBLIC_SECOND_ME_API_KEY
+  process.env.NEXT_PUBLIC_SECOND_ME_API_URL || 'https://second-me.cn'
 )
+
+export type { DigitalTwin, UserInfo }
+export { SecondMeClient }

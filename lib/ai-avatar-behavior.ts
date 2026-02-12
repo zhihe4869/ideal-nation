@@ -103,16 +103,28 @@ export class AIAvatarBehavior {
     const nearbyAvatars = allAvatars.filter(a => {
       const distance = Math.sqrt(
         Math.pow(a.position[0] - avatar.position[0], 2) +
-        Math.pow(a.position[1] - avatar.position[1], 2)
+        Math.pow(a.position[2] - avatar.position[2], 2)
       )
       return distance < 10 && a.id !== avatar.id
     })
 
-    if (nearbyAvatars.length > 0 && Math.random() > 0.5) {
+    // 行为概率
+    const random = Math.random()
+    
+    if (nearbyAvatars.length > 0 && random > 0.6) {
+      // 有附近的数字分身，可能开始对话
       await this.initiateConversation(avatar, nearbyAvatars)
-    } else if (Math.random() > 0.7) {
+    } else if (random > 0.4) {
+      // 随机移动
       await this.wander(avatar)
-    } else if (Math.random() > 0.8) {
+    } else if (random > 0.2) {
+      // 思考
+      await this.think(avatar)
+    } else if (random > 0.1) {
+      // 观察
+      await this.observe(avatar, allAvatars)
+    } else {
+      // 创建理想碎片
       await this.createFragment(avatar)
     }
   }
@@ -121,51 +133,118 @@ export class AIAvatarBehavior {
     const target = nearbyAvatars[Math.floor(Math.random() * nearbyAvatars.length)]
     
     const conversationId = `conv-${Date.now()}`
+    const topics = [
+      '人工智能的未来发展',
+      '理想国的构建',
+      '数字分身的意义',
+      '科技与人文的关系',
+      '创意与创新',
+      '未来社会的形态',
+      '数字世界与现实世界的融合'
+    ]
+    const randomTopic = topics[Math.floor(Math.random() * topics.length)]
+    
     const conversation: AIConversation = {
       id: conversationId,
       participants: [avatar.id, target.id],
       messages: [],
-      topic: ''
+      topic: randomTopic
     }
 
     this.conversations.set(conversationId, conversation)
 
-    const systemPrompt = await this.initializeAvatar(avatar)
-    
-    try {
-      const response = await secondMeClient.chat({
-        messages: [
+    // 开始多轮对话
+    for (let i = 0; i < 3; i++) {
+      // 发送方
+      const sender = i % 2 === 0 ? avatar : target
+      const receiver = i % 2 === 0 ? target : avatar
+      
+      const systemPrompt = await this.initializeAvatar(sender)
+      
+      try {
+        // 构建对话历史
+        const messageHistory = conversation.messages.map(msg => ({
+          role: msg.senderId === sender.id ? 'assistant' : 'user',
+          content: msg.content
+        }))
+        
+        // 构建当前消息
+        let userMessage = ''
+        if (i === 0) {
+          userMessage = `你遇到了${receiver.name}，请围绕话题"${randomTopic}"开始对话。`
+        } else {
+          userMessage = `${receiver.name}刚刚说了："${conversation.messages[conversation.messages.length - 1].content}"，请继续对话。`
+        }
+        
+        const messages = [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `你遇到了${target.name}，请开始对话。` }
-        ],
-        temperature: 0.8,
-        max_tokens: 200
-      })
+          ...messageHistory,
+          { role: 'user', content: userMessage }
+        ]
+        const response = await secondMeClient.chat(messages, 0.8, 200)
 
-      const message = response.choices[0].delta.content || ''
-      conversation.messages.push({
-        senderId: avatar.id,
-        content: message,
-        timestamp: new Date()
-      })
+        const message = response.choices[0].delta.content || ''
+        conversation.messages.push({
+          senderId: sender.id,
+          content: message,
+          timestamp: new Date()
+        })
 
-      avatar.action = 'interacting'
-      this.avatars.set(avatar.id, avatar)
-    } catch (error) {
-      console.error('Failed to generate conversation:', error)
+        // 更新发送方的状态
+        sender.action = 'interacting'
+        this.avatars.set(sender.id, sender)
+        
+        // 等待一段时间再继续对话
+        await this.sleep(2000)
+      } catch (error) {
+        console.error('Failed to generate conversation:', error)
+        break
+      }
     }
+
+    // 对话结束后，更新双方的状态
+    avatar.action = 'idle'
+    target.action = 'idle'
+    this.avatars.set(avatar.id, avatar)
+    this.avatars.set(target.id, target)
   }
 
   private async wander(avatar: AIAvatar) {
     const angle = Math.random() * Math.PI * 2
     const distance = 2 + Math.random() * 3
     
-    avatar.position = [
-      avatar.position[0] + Math.cos(angle) * distance,
-      avatar.position[1] + Math.sin(angle) * distance,
-      avatar.position[2]
-    ]
+    // 随机选择移动模式
+    const moveModes = ['straight', 'curved', 'random']
+    const moveMode = moveModes[Math.floor(Math.random() * moveModes.length)]
     
+    let newPosition = [...avatar.position] as [number, number, number]
+    
+    if (moveMode === 'straight') {
+      // 直线移动
+      newPosition = [
+        avatar.position[0] + Math.cos(angle) * distance,
+        avatar.position[1],
+        avatar.position[2] + Math.sin(angle) * distance
+      ]
+    } else if (moveMode === 'curved') {
+      // 曲线移动
+      const curveAngle = angle + Math.PI / 4
+      newPosition = [
+        avatar.position[0] + (Math.cos(angle) + Math.cos(curveAngle)) * distance * 0.5,
+        avatar.position[1],
+        avatar.position[2] + (Math.sin(angle) + Math.sin(curveAngle)) * distance * 0.5
+      ]
+    } else {
+      // 随机移动
+      newPosition = [
+        avatar.position[0] + (Math.random() - 0.5) * distance * 2,
+        avatar.position[1],
+        avatar.position[2] + (Math.random() - 0.5) * distance * 2
+      ]
+    }
+    
+    // 更新位置和旋转
+    avatar.position = newPosition
     avatar.rotation = [
       0,
       angle,
@@ -176,6 +255,50 @@ export class AIAvatarBehavior {
     this.avatars.set(avatar.id, avatar)
   }
 
+  // 思考行为
+  private async think(avatar: AIAvatar) {
+    avatar.action = 'thinking'
+    this.avatars.set(avatar.id, avatar)
+    
+    // 思考一段时间
+    await this.sleep(3000)
+    
+    // 思考后可能创建理想碎片
+    if (Math.random() > 0.5) {
+      await this.createFragment(avatar)
+    }
+    
+    avatar.action = 'idle'
+    this.avatars.set(avatar.id, avatar)
+  }
+
+  // 观察行为
+  private async observe(avatar: AIAvatar, allAvatars: AIAvatar[]) {
+    const nearbyAvatars = allAvatars.filter(a => {
+      const distance = Math.sqrt(
+        Math.pow(a.position[0] - avatar.position[0], 2) +
+        Math.pow(a.position[2] - avatar.position[2], 2)
+      )
+      return distance < 15 && a.id !== avatar.id
+    })
+    
+    if (nearbyAvatars.length > 0) {
+      avatar.action = 'thinking'
+      this.avatars.set(avatar.id, avatar)
+      
+      // 观察一段时间
+      await this.sleep(2000)
+      
+      // 可能加入对话
+      if (Math.random() > 0.7) {
+        await this.initiateConversation(avatar, nearbyAvatars)
+      }
+    }
+    
+    avatar.action = 'idle'
+    this.avatars.set(avatar.id, avatar)
+  }
+
   private async createFragment(avatar: AIAvatar) {
     const systemPrompt = await this.initializeAvatar(avatar)
     
@@ -183,14 +306,11 @@ export class AIAvatarBehavior {
     const selectedType = fragmentTypes[Math.floor(Math.random() * fragmentTypes.length)]
     
     try {
-      const response = await secondMeClient.chat({
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: `请创建一个${selectedType === 'value' ? '价值观' : selectedType === 'rule' ? '规则' : selectedType === 'vision' ? '愿景' : '故事'}类型的理想碎片。` }
-        ],
-        temperature: 0.9,
-        max_tokens: 300
-      })
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `请创建一个${selectedType === 'value' ? '价值观' : selectedType === 'rule' ? '规则' : selectedType === 'vision' ? '愿景' : '故事'}类型的理想碎片。` }
+      ]
+      const response = await secondMeClient.chat(messages, 0.9, 300)
 
       const content = response.choices[0].delta.content || ''
       
