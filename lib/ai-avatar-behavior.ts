@@ -252,7 +252,7 @@ export class AIAvatarBehavior {
     return this.fragments
   }
 
-  getRules() Array<{
+  getRules(): Array<{
     id: string
     content: string
     sourceFragments: string[]

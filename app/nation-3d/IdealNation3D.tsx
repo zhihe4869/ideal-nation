@@ -2,7 +2,7 @@
 
 import { useRef, useMemo } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls, Stars, Float, Text3D, Center } from '@react-three/drei'
+import { OrbitControls, Stars, Float, Line } from '@react-three/drei'
 import * as THREE from 'three'
 
 function FloatingFragment({ position, color, label }: { position: [number, number, number]; color: string; label: string }) {
@@ -67,24 +67,18 @@ function CentralCore() {
 
 function ConnectionLines() {
   const points = useMemo(() => {
-    const pts: THREE.Vector3[] = []
+    const pts: [number, number, number][] = []
     const radius = 5
     for (let i = 0; i < 20; i++) {
       const angle = (i / 20) * Math.PI * 2
-      pts.push(new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius))
+      pts.push([Math.cos(angle) * radius, 0, Math.sin(angle) * radius])
     }
+    pts.push(pts[0])
     return pts
   }, [])
 
-  const lineGeometry = useMemo(() => {
-    const geometry = new THREE.BufferGeometry().setFromPoints(points)
-    return geometry
-  }, [points])
-
   return (
-    <line geometry={lineGeometry}>
-      <lineBasicMaterial color="#8b5cf6" opacity={0.3} transparent />
-    </line>
+    <Line points={points} color="#8b5cf6" lineWidth={1} opacity={0.3} transparent />
   )
 }
 

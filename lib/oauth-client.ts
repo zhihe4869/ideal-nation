@@ -65,7 +65,7 @@ export class OAuth2Client {
   async refreshToken(refreshToken: string): Promise<OAuthToken> {
     const params = new URLSearchParams({
       grant_type: 'refresh_token',
-      refresh_token,
+      refresh_token: refreshToken,
       client_id: this.config.clientId,
       client_secret: this.config.clientSecret
     })
