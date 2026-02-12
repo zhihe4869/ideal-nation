@@ -1,0 +1,15 @@
+{
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["hkg1"],
+  "env": {
+    "NEXT_PUBLIC_SECOND_ME_CLIENT_ID": "a7863097-e8d5-4e68-b261-1a0e7d2d0eb6",
+    "NEXT_PUBLIC_SECOND_ME_CLIENT_SECRET": "9221413a948bf5c6e57f18ac4a7fd1c893376bfaab605da564404228193fac22",
+    "NEXT_PUBLIC_SECOND_ME_REDIRECT_URI": "https://allju.net/api/auth/callback",
+    "NEXT_PUBLIC_SECOND_ME_AUTH_URL": "https://second-me.cn/oauth/authorize",
+    "NEXT_PUBLIC_SECOND_ME_API_URL": "https://second-me.cn",
+    "NEXT_PUBLIC_SECOND_ME_TOKEN_URL": "https://second-me.cn/oauth/token"
+  }
+}
